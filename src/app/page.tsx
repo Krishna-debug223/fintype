@@ -1,5 +1,5 @@
-import { TestMockup } from "@/components/typing/test-mockup";
+import { TestScreen } from "@/components/typing/test-screen";
 
 export default function HomePage() {
-  return <TestMockup />;
+  return <TestScreen />;
 }

@@ -22,6 +22,42 @@ const eslintConfig = defineConfig([
       "@typescript-eslint/no-explicit-any": "error",
     },
   },
+  {
+    files: ["src/engine/**/*.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: [
+                "react",
+                "react/*",
+                "next",
+                "next/*",
+                "zustand",
+                "zustand/*",
+              ],
+              message:
+                "The typing engine must remain framework-free for server replay.",
+            },
+          ],
+        },
+      ],
+      "no-restricted-globals": [
+        "error",
+        "window",
+        "document",
+        "performance",
+        "setInterval",
+      ],
+      "no-restricted-properties": [
+        "error",
+        { object: "Math", property: "random" },
+        { object: "Date", property: "now" },
+      ],
+    },
+  },
 ]);
 
 export default eslintConfig;

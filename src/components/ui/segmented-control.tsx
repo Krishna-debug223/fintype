@@ -2,9 +2,13 @@
 
 import { cn } from "@/lib/cn";
 
+import { Tooltip } from "./tooltip";
+
 export interface SegmentOption<T extends string> {
   label: string;
   value: T;
+  disabled?: boolean;
+  tooltip?: string;
 }
 
 export interface SegmentedControlProps<T extends string> {
@@ -35,25 +39,34 @@ export function SegmentedControl<T extends string>({
     >
       {options.map((option) => {
         const selected = option.value === value;
-        return (
+        const unavailable = readOnly || option.disabled;
+        const button = (
           <button
+            aria-disabled={unavailable}
             aria-pressed={selected}
             className={cn(
               "rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
               selected
                 ? "bg-surface text-accent shadow-sm"
                 : "text-muted hover:text-foreground",
-              readOnly && "cursor-default",
+              unavailable && "cursor-not-allowed opacity-55",
             )}
-            key={option.value}
             onClick={() => {
-              if (!readOnly) onValueChange?.(option.value);
+              if (!unavailable) onValueChange?.(option.value);
             }}
-            tabIndex={readOnly ? -1 : 0}
+            tabIndex={unavailable ? -1 : 0}
             type="button"
           >
             {option.label}
           </button>
+        );
+
+        return option.tooltip ? (
+          <Tooltip content={option.tooltip} key={option.value}>
+            <span>{button}</span>
+          </Tooltip>
+        ) : (
+          <span key={option.value}>{button}</span>
         );
       })}
     </div>

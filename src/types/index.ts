@@ -5,6 +5,7 @@ export type {
   ContentItem,
   Difficulty,
   FontSize,
+  KeystrokeLog,
   KeystrokeLogEntry,
   Mode,
   Rank,

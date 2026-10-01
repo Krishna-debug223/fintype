@@ -1,8 +1,8 @@
 # FinType
 
-FinType is a finance-native typing platform for the words, figures, and formulas used in investment banking, private equity, equity research, sales and trading, and fintech. This repository currently contains the production-oriented foundation only: tooling, architecture, shared domain types, design tokens, accessible UI primitives, an app shell, and static route previews.
+FinType is a finance-native typing platform for the words, figures, and formulas used in investment banking, private equity, equity research, sales and trading, and fintech. The repository now includes the production foundation, a deterministic replayable typing engine, and a fully playable Terms-mode test screen.
 
-The typing engine, game state, persistence, authentication, and database integrations are deliberately not part of this stage.
+The full content system, accounts, database integrations, leaderboards, charts, and expanded results experience are deliberately reserved for later stages.
 
 ## Tech stack
 
@@ -24,7 +24,7 @@ pnpm install
 pnpm dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). The home route is intentionally a static visual mockup; keyboard input does not start a test in this stage.
+Open [http://localhost:3000](http://localhost:3000), click the typing area, and type. Terms mode supports timed and word-count tests, live metrics, corrections, keyboard restarts, and a compact results panel.
 
 ## Commands
 
@@ -51,8 +51,8 @@ pnpm exec playwright install chromium
 ```text
 src/
 ├── app/                 App Router pages, layouts, metadata, and future APIs
-├── engine/              Framework-free typing and replay logic
-├── content/             Typed finance content and deterministic generators
+├── engine/              Framework-free input, metrics, RNG, and replay logic
+├── content/             Temporary seeded Terms content (full system is Prompt 3)
 ├── components/
 │   ├── ui/              Generic accessible primitives
 │   ├── typing/          Test-specific presentation
@@ -94,6 +94,12 @@ Semantic roles—background, surface, border, text, muted text, accent, correct,
 - Use deterministic seeds for generated content and daily challenges so tests can be reproduced and validated.
 - Do not add database, ORM, or authentication dependencies until their dedicated stage defines the data and identity boundaries.
 
+## Typing engine and test screen
+
+The complete server-replay contract is documented in [`src/engine/ENGINE.md`](src/engine/ENGINE.md). The reducer accepts explicit timestamps, uses structurally shared word state, logs only accepted input, and returns finite deterministic metrics. ESLint plus a dedicated unit test prevent framework, DOM, clock, timer, and `Math.random` access inside the engine.
+
+The `/` route translates hidden-input keyboard events into engine actions. A `requestAnimationFrame` loop drives the deadline and throttles live statistics to four updates per second. The engine state remains the single source of game behavior; Zustand stores only persisted length selection and UI-level session output. Each word is memoized against its structurally shared word object and active state, so typing does not re-render unchanged word components.
+
 ## Assumptions and decisions
 
 - `https://fintype.app` is a placeholder canonical origin for metadata, robots, and sitemap output; replace it when the production domain is chosen.
@@ -104,6 +110,11 @@ Semantic roles—background, surface, border, text, muted text, accent, correct,
 - The current picker controls on `/` are deliberately read-only, and the sign-in control is deliberately disabled.
 - Radix primitives are used only where browser-level accessibility is easy to get wrong: dialogs and tooltips.
 - No Open Graph image is generated in this foundation; title, description, card type, and canonical base defaults are configured.
+- Unicode comparison is code-point based. This handles accented characters and surrogate-pair emoji without splitting them; multi-code-point grapheme clusters will need an explicit segmentation policy before international competitive validation.
+- `deleteWord` counts as one correction action regardless of how many visible characters it clears.
+- Try Again reuses the current seed; Next Test, Escape, and Tab then Enter generate a new seed.
+- The temporary Terms list is intentionally unstructured and may repeat non-adjacent items. Prompt 3 replaces it with typed mode-specific generators.
+- Engine results leave `createdAt` as `null`; the future persistence boundary attaches wall-clock metadata without compromising deterministic replay.
 
 ## Foundation checklist
 
@@ -123,6 +134,12 @@ Semantic roles—background, surface, border, text, muted text, accent, correct,
 - [x] Custom not-found and route error states
 - [x] Metadata defaults, robots route, and sitemap stub
 - [x] `.env.example`, `.gitignore`, `.editorconfig`, and repository documentation
+- [x] Deterministic word-based engine with all specified correction, finish, and logging rules
+- [x] Seeded RNG, metrics, per-second series, and byte-equivalent replay
+- [x] Exhaustive unit coverage, fuzz invariants, and forbidden-import enforcement
+- [x] Playable Terms test with IME-aware hidden input, focus recovery, smooth caret, and three-line scrolling
+- [x] Persisted timed/word length controls, throttled live stats, and minimal ranked results
+- [x] Playwright journeys for a perfect 15-second test and idle/restart keyboard behavior
 
 ## Verification
 
@@ -137,4 +154,4 @@ pnpm test
 pnpm build
 ```
 
-Prompt 2 should implement the pure, deterministic typing engine and its exhaustive unit tests: text/character modeling, cursor transitions, word boundaries, error states, timing samples, WPM/raw WPM/accuracy/consistency calculations, keystroke logs, seeded content input, and replayable state transitions—still without database or authentication work.
+Prompt 3 should replace the temporary list with the typed content system: deterministic seeded generators and validation for Terms, Office, Numbers, Excel, Mixed, Daily, and Custom modes, including difficulty, punctuation, number, and content-quality rules.

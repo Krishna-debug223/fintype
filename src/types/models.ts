@@ -32,6 +32,8 @@ export interface TestSettings {
   theme: Theme;
   fontSize: FontSize;
   caretStyle: CaretStyle;
+  /** Stable identifier used to regenerate this test's content. */
+  seed: string;
 }
 
 export type CharState =
@@ -50,6 +52,7 @@ export interface WpmSample {
   second: number;
   wpm: number;
   rawWpm: number;
+  errors: number;
 }
 
 /** Serializable output of a completed typing test. */
@@ -65,7 +68,8 @@ export interface TestResult {
   mode: Mode;
   settings: TestSettings;
   seed: string;
-  createdAt: string;
+  /** Wall-clock metadata is attached by the persistence layer in a later stage. */
+  createdAt: string | null;
 }
 
 export type RankTitle =
@@ -86,8 +90,9 @@ export interface ContentItem {
   tags: readonly string[];
 }
 
-/** A replayable key event recorded relative to the start of a test. */
-export interface KeystrokeLogEntry {
-  key: string;
-  offsetMs: number;
-}
+/** A compact replayable key event recorded relative to the test start. */
+export type KeystrokeLogEntry =
+  | { type: "char"; char: string; t: number }
+  | { type: "space" | "backspace" | "deleteWord"; t: number };
+
+export type KeystrokeLog = readonly KeystrokeLogEntry[];
