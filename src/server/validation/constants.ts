@@ -1,0 +1,15 @@
+export const ANTI_CHEAT = {
+  hardWpmCeiling: 300,
+  reviewWpmFloor: 220,
+  minimumIntervalMs: 15,
+  minimumIntervalShare: 0.25,
+  uniformIntervalCv: 0.02,
+  uniformIntervalMinimumSamples: 20,
+  highSpeedAccuracy: 0.995,
+  highSpeedMinimumSamples: 40,
+  maxAgeDays: 30,
+  futureClockSkewMs: 10 * 60_000,
+  dailyGraceMs: 10 * 60_000,
+  maxBodyBytes: 256_000,
+  maxLogEntries: 20_000,
+} as const;

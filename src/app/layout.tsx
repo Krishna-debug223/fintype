@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { Footer } from "@/components/layout/footer";
 import { Header } from "@/components/layout/header";
 import { ThemeProvider } from "@/components/ui/theme-provider";
+import { ToastProvider } from "@/components/ui/toast";
 import { APP_DESCRIPTION, APP_NAME } from "@/lib/constants";
 
 import "./globals.css";
@@ -42,13 +43,9 @@ export const viewport: Viewport = {
   ],
 };
 
-const themeBootScript = `(() => {
-  try {
-    const value = localStorage.getItem("fintype-theme");
-    const themes = ["dark", "light", "terminal", "wallstreet"];
-    document.documentElement.dataset.theme = themes.includes(value) ? value : "dark";
-  } catch { document.documentElement.dataset.theme = "dark"; }
-})();`;
+// The header reads the Auth.js session; do not cache a signed-out shell for
+// users who have an active session.
+export const dynamic = "force-dynamic";
 
 export default function RootLayout({
   children,
@@ -60,16 +57,15 @@ export default function RootLayout({
       lang="en"
       suppressHydrationWarning
     >
-      <head>
-        <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
-      </head>
       <body>
         <ThemeProvider>
-          <div className="flex min-h-screen flex-col">
-            <Header />
-            <main className="flex flex-1 flex-col">{children}</main>
-            <Footer />
-          </div>
+          <ToastProvider>
+            <div className="flex min-h-screen flex-col">
+              <Header />
+              <main className="flex flex-1 flex-col">{children}</main>
+              <Footer />
+            </div>
+          </ToastProvider>
         </ThemeProvider>
       </body>
     </html>

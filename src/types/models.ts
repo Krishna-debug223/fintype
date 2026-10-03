@@ -17,7 +17,7 @@ export interface WordTestLength {
 export type TestLength = TimeTestLength | WordTestLength;
 export type Difficulty = "easy" | "medium" | "hard";
 export type Theme = "dark" | "light" | "terminal" | "wallstreet";
-export type FontSize = "small" | "medium" | "large";
+export type FontSize = "small" | "medium" | "large" | "xl";
 export type CaretStyle = "line" | "block" | "underline";
 
 /** The full set of preferences required to reproduce a test. */
@@ -70,6 +70,80 @@ export interface TestResult {
   seed: string;
   /** Wall-clock metadata is attached by the persistence layer in a later stage. */
   createdAt: string | null;
+}
+
+/** A completed test retained by the local repository. */
+export interface SavedTest {
+  id: string;
+  createdAt: string;
+  mode: Mode;
+  difficulty: Difficulty;
+  length: TestLength;
+  settings: Pick<
+    TestSettings,
+    "punctuation" | "numbers" | "stopOnError" | "confidenceMode"
+  >;
+  seed: string;
+  wpm: number;
+  rawWpm: number;
+  accuracy: number;
+  consistency: number;
+  errors: number;
+  characterBreakdown: CharacterBreakdown;
+  durationMs: number;
+  wpmPerSecond: readonly WpmSample[];
+  rank: RankTitle;
+  isPersonalBest: boolean;
+  eligibleForLeaderboard: boolean;
+  keystrokeLog?: KeystrokeLog;
+  synced: boolean;
+  schemaVersion: number;
+  retryOfTestId: string | null;
+}
+
+export interface UserSettings {
+  theme: Theme;
+  fontSize: FontSize;
+  caretStyle: CaretStyle;
+  smoothCaret: boolean;
+  showLiveWpm: boolean;
+  showLiveAccuracy: boolean;
+  showTimer: boolean;
+  defaultMode: Mode;
+  defaultLength: TestLength;
+  difficulty: Difficulty;
+  punctuation: boolean;
+  numbers: boolean;
+  stopOnError: boolean;
+  confidenceMode: boolean;
+  quickRestartKey: "tab-enter" | "escape";
+  blindMode: boolean;
+  reducedMotion: "system" | "on" | "off";
+  highContrast: boolean;
+  largerCaret: boolean;
+}
+
+export interface LocalProfile {
+  localId: string;
+  createdAt: string;
+  totalTests: number;
+  totalTimeMs: number;
+}
+
+export interface PersonalBest {
+  testId: string;
+  wpm: number;
+  accuracy: number;
+  createdAt: string;
+}
+
+export type PersonalBests = Readonly<Record<string, PersonalBest>>;
+
+export interface DailyRecord {
+  date: string;
+  wpm: number;
+  accuracy: number;
+  testId: string;
 }
 
 export type RankTitle =

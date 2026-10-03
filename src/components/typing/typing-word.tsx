@@ -31,6 +31,7 @@ function CaretAnchor({
       aria-hidden="true"
       className="inline-block h-[1.25em] w-0 align-[-0.22em]"
       data-caret-anchor
+      data-testid="caret-anchor"
       ref={caretAnchorRef}
     />
   );
@@ -50,8 +51,8 @@ function TypingWordComponent({
   return (
     <span
       className={cn(
-        "mr-[0.58em] inline-block rounded-sm border-b border-transparent whitespace-nowrap",
-        incorrectSubmission && "border-dotted border-incorrect",
+        "mr-[0.58em] inline-block rounded-sm whitespace-nowrap",
+        incorrectSubmission && "border-b border-dotted border-incorrect",
       )}
       data-active={active ? "true" : "false"}
       data-target={word.target}
@@ -62,7 +63,12 @@ function TypingWordComponent({
           {active && typedCharacters.length === index ? (
             <CaretAnchor caretAnchorRef={caretAnchorRef} />
           ) : null}
-          <span className={stateClasses[charStates[index] ?? "untyped"]}>
+          <span
+            className={stateClasses[charStates[index] ?? "untyped"]}
+            data-active-character={
+              active && typedCharacters.length <= index ? "true" : undefined
+            }
+          >
             {character}
           </span>
         </span>

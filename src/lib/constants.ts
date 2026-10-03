@@ -35,6 +35,7 @@ export const FONT_SIZES = [
   "small",
   "medium",
   "large",
+  "xl",
 ] as const satisfies readonly FontSize[];
 export const CARET_STYLES = [
   "line",

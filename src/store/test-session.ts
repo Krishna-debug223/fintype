@@ -2,7 +2,8 @@
 
 import { create } from "zustand";
 
-import type { TestLength, TestResult } from "@/types";
+import { getLocalRepository } from "@/lib/storage";
+import type { Mode, TestLength, TestResult } from "@/types";
 import type { TestStatus } from "@/engine";
 
 export type TestLengthKey =
@@ -29,7 +30,7 @@ const VALID_LENGTH_KEYS: readonly TestLengthKey[] = [
 
 interface TestSessionStore {
   settings: {
-    mode: "terms";
+    mode: Mode;
     lengthKey: TestLengthKey;
   };
   hydrated: boolean;
@@ -37,6 +38,7 @@ interface TestSessionStore {
   result: TestResult | null;
   hydrate: () => void;
   setLengthKey: (length: TestLengthKey) => void;
+  setMode: (mode: Mode) => void;
   setSession: (status: TestStatus, result: TestResult | null) => void;
 }
 
@@ -86,15 +88,32 @@ export const useTestSessionStore = create<TestSessionStore>((set) => ({
   uiStatus: "idle",
   result: null,
   hydrate: () => {
-    const lengthKey = readTestLength(window.localStorage);
+    const settings = getLocalRepository().getSettings();
+    const saved = settings.defaultLength;
+    const daily = new URLSearchParams(window.location.search).has("daily");
+    const lengthKey = daily
+      ? "time:60"
+      : (`${saved.type}:${saved.type === "time" ? saved.seconds : saved.words}` as TestLengthKey);
     set({
-      settings: { mode: "terms", lengthKey },
+      settings: {
+        mode: daily ? "daily" : settings.defaultMode,
+        lengthKey,
+      },
       hydrated: true,
     });
   },
   setLengthKey: (lengthKey) => {
-    persistTestLength(lengthKey, window.localStorage);
-    set({ settings: { mode: "terms", lengthKey } });
+    const repository = getLocalRepository();
+    repository.setSettings({
+      ...repository.getSettings(),
+      defaultLength: parseTestLength(lengthKey),
+    });
+    set((state) => ({ settings: { ...state.settings, lengthKey } }));
+  },
+  setMode: (mode) => {
+    const repository = getLocalRepository();
+    repository.setSettings({ ...repository.getSettings(), defaultMode: mode });
+    set((state) => ({ settings: { ...state.settings, mode } }));
   },
   setSession: (uiStatus, result) => set({ uiStatus, result }),
 }));

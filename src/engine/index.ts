@@ -6,6 +6,13 @@ export {
   getPerSecondSeries,
   getResult,
 } from "./metrics";
+export {
+  getCharMistakes,
+  getSlowestWords,
+  getSymbolAccuracy,
+  getWordStats,
+} from "./analysis";
+export type { CharMistake, SymbolAccuracy, WordStat } from "./analysis";
 export { replay } from "./replay";
 export { createRng } from "./rng";
 export { createTest } from "./state";

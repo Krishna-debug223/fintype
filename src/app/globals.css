@@ -68,6 +68,11 @@
   --theme-warning: #e5b85b;
 }
 
+[data-contrast="high"] {
+  --theme-border: color-mix(in srgb, var(--theme-text) 55%, transparent);
+  --theme-text-muted: color-mix(in srgb, var(--theme-text) 82%, transparent);
+}
+
 * {
   border-color: var(--theme-border);
 }
@@ -129,4 +134,13 @@ body {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+[data-motion="on"] *,
+[data-motion="on"] *::before,
+[data-motion="on"] *::after {
+  scroll-behavior: auto !important;
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
 }

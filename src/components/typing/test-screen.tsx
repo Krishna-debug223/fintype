@@ -13,50 +13,49 @@ import type {
   CompositionEvent,
   DragEvent,
   FormEvent,
-  KeyboardEvent,
 } from "react";
 
-import { getPlaceholderWords } from "@/content";
-import { applyInput, createTest, finishTest, getResult } from "@/engine";
+import { getModeWords } from "@/content";
+import {
+  applyInput,
+  createTest,
+  finishTest,
+  getCharMistakes,
+  getResult,
+  getSlowestWords,
+  getSymbolAccuracy,
+} from "@/engine";
 import type { TestInput, TestState } from "@/engine";
 import { cn } from "@/lib/cn";
 import { parseTestLength, useTestSessionStore } from "@/store/test-session";
 import type { TestLengthKey } from "@/store/test-session";
-import type { TestResult, TestSettings, Theme } from "@/types";
+import type { Mode, TestResult, TestSettings, Theme } from "@/types";
+import { useLocalDataStore } from "@/store/local-data";
+import { DEFAULT_USER_SETTINGS } from "@/lib/storage";
 
 import { Card } from "../ui/card";
 import { Kbd } from "../ui/kbd";
 import { SegmentedControl } from "../ui/segmented-control";
 import { useTheme } from "../ui/theme-provider";
 import { TestResults } from "./test-results";
+import {
+  getCaretPosition,
+  getCaretScrollTop,
+  TYPING_LINE_HEIGHT_PX,
+} from "./caret";
+import {
+  armTabRestart,
+  getTabRestartAction,
+  TAB_RESTART_HINT_MS,
+} from "./interaction";
 import { TypingWord } from "./typing-word";
 
 const modeOptions = [
   { label: "terms", value: "terms" },
-  {
-    label: "office",
-    value: "office",
-    disabled: true,
-    tooltip: "Coming in Prompt 3",
-  },
-  {
-    label: "numbers",
-    value: "numbers",
-    disabled: true,
-    tooltip: "Coming in Prompt 3",
-  },
-  {
-    label: "excel",
-    value: "excel",
-    disabled: true,
-    tooltip: "Coming in Prompt 3",
-  },
-  {
-    label: "mixed",
-    value: "mixed",
-    disabled: true,
-    tooltip: "Coming in Prompt 3",
-  },
+  { label: "office", value: "office" },
+  { label: "numbers", value: "numbers" },
+  { label: "excel", value: "excel" },
+  { label: "mixed", value: "mixed" },
 ] as const;
 
 const lengthOptions = [
@@ -81,21 +80,23 @@ function createSeed(): string {
 }
 
 function createSettings(
+  mode: Mode,
   lengthKey: TestLengthKey,
   seed: string,
   theme: Theme,
+  preferences = DEFAULT_USER_SETTINGS,
 ): TestSettings {
   return {
-    mode: "terms",
+    mode,
     length: parseTestLength(lengthKey),
-    punctuation: true,
-    numbers: true,
-    difficulty: "medium",
-    stopOnError: false,
-    confidenceMode: false,
+    punctuation: preferences.punctuation,
+    numbers: preferences.numbers,
+    difficulty: preferences.difficulty,
+    stopOnError: preferences.stopOnError,
+    confidenceMode: preferences.confidenceMode,
     theme,
-    fontSize: "medium",
-    caretStyle: "line",
+    fontSize: preferences.fontSize,
+    caretStyle: preferences.caretStyle,
     seed,
   };
 }
@@ -106,46 +107,109 @@ function wordCountFor(lengthKey: TestLengthKey): number {
 }
 
 function makeTest(
+  mode: Mode,
   lengthKey: TestLengthKey,
   seed: string,
   theme: Theme,
+  preferences = DEFAULT_USER_SETTINGS,
 ): TestState {
   return createTest(
-    getPlaceholderWords(wordCountFor(lengthKey), seed),
-    createSettings(lengthKey, seed, theme),
+    getModeWords(mode, wordCountFor(lengthKey), seed),
+    createSettings(mode, lengthKey, seed, theme, preferences),
+  );
+}
+
+function isEditableTarget(
+  target: EventTarget | null,
+  captureInput: HTMLInputElement | null,
+): boolean {
+  if (!(target instanceof HTMLElement) || target === captureInput) return false;
+  return Boolean(
+    target.closest(
+      'input, textarea, select, [contenteditable="true"], [contenteditable=""]',
+    ),
+  );
+}
+
+function hasOpenModal(): boolean {
+  return Boolean(
+    document.querySelector('[role="dialog"], [data-modal-open="true"]'),
   );
 }
 
 export function TestScreen() {
   const { theme } = useTheme();
   const lengthKey = useTestSessionStore((state) => state.settings.lengthKey);
+  const mode = useTestSessionStore((state) => state.settings.mode);
   const hydrated = useTestSessionStore((state) => state.hydrated);
   const hydrate = useTestSessionStore((state) => state.hydrate);
   const setLengthKey = useTestSessionStore((state) => state.setLengthKey);
+  const setMode = useTestSessionStore((state) => state.setMode);
   const setSession = useTestSessionStore((state) => state.setSession);
   const result = useTestSessionStore((state) => state.result);
+  const saveCompleted = useLocalDataStore((state) => state.saveCompleted);
+  const recordDaily = useLocalDataStore((state) => state.recordDaily);
+  const localSettings = useLocalDataStore((state) => state.settings);
+  const hydrateLocalData = useLocalDataStore((state) => state.hydrate);
 
   const initialState = useMemo(
-    () => makeTest("time:30", "initial-session", "dark"),
+    () =>
+      makeTest(
+        "terms",
+        "time:30",
+        "initial-session",
+        "dark",
+        DEFAULT_USER_SETTINGS,
+      ),
     [],
   );
   const [engineState, setEngineState] = useState(initialState);
   const engineStateRef = useRef(engineState);
   const inputRef = useRef<HTMLInputElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
+  const linesRef = useRef<HTMLDivElement>(null);
   const caretAnchorRef = useRef<HTMLSpanElement | null>(null);
-  const restartArmedRef = useRef(false);
+  const restartArmedAtRef = useRef<number | null>(null);
+  const tabHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastEscapeAtRef = useRef<number | null>(null);
+  const savedResultKeyRef = useRef<string | null>(null);
+  const savedTestIdRef = useRef<string | null>(null);
+  const retryOfTestIdRef = useRef<string | null>(null);
+  const dailySeedRef = useRef<string | null>(null);
+  const restartRef = useRef<(options?: { reuseSeed?: boolean }) => void>(
+    () => undefined,
+  );
+  const keyDownRef = useRef<(event: globalThis.KeyboardEvent) => void>(
+    () => undefined,
+  );
   const [focused, setFocused] = useState(false);
+  const [tabHintVisible, setTabHintVisible] = useState(false);
   const [liveStats, setLiveStats] = useState<LiveStats>({
     wpm: 0,
     accuracy: 100,
     now: 0,
   });
   const [caret, setCaret] = useState({ x: 0, y: 0, height: 34 });
+  const [resultDetails, setResultDetails] = useState<{
+    isPersonalBest: boolean;
+    previousBestWpm: number | null;
+    slowestWords: ReturnType<typeof getSlowestWords>;
+    mistakes: ReturnType<typeof getCharMistakes>;
+    symbolAccuracy: ReturnType<typeof getSymbolAccuracy>;
+  } | null>(null);
 
   const focusInput = useCallback(() => {
     inputRef.current?.focus({ preventScroll: true });
   }, []);
+
+  useEffect(() => {
+    const daily = new URLSearchParams(window.location.search).get("daily");
+    if (daily) {
+      dailySeedRef.current = `daily:${daily}`;
+      setMode("daily");
+      setLengthKey("time:60");
+    }
+  }, [setLengthKey, setMode]);
 
   const commitState = useCallback(
     (nextState: TestState) => {
@@ -155,6 +219,31 @@ export function TestScreen() {
         nextState.status === "finished" ? getResult(nextState) : null;
       setSession(nextState.status, nextResult);
       if (nextResult) {
+        const resultKey = `${nextResult.seed}:${nextState.endTimestampMs ?? "finished"}`;
+        if (savedResultKeyRef.current !== resultKey) {
+          const retryOfTestId = retryOfTestIdRef.current;
+          const outcome = saveCompleted(nextResult, nextState.keystrokeLog, {
+            retryOfTestId,
+          });
+          savedResultKeyRef.current = resultKey;
+          savedTestIdRef.current = outcome.test.id;
+          retryOfTestIdRef.current = null;
+          setResultDetails({
+            isPersonalBest: outcome.test.isPersonalBest,
+            previousBestWpm: outcome.previousBest?.wpm ?? null,
+            slowestWords: getSlowestWords(nextState),
+            mistakes: getCharMistakes(nextState),
+            symbolAccuracy: getSymbolAccuracy(nextState),
+          });
+          if (nextResult.mode === "daily" && retryOfTestId === null) {
+            recordDaily({
+              date: new Date().toISOString().slice(0, 10),
+              wpm: nextResult.wpm,
+              accuracy: nextResult.accuracy,
+              testId: outcome.test.id,
+            });
+          }
+        }
         setLiveStats({
           wpm: nextResult.wpm,
           accuracy: nextResult.accuracy,
@@ -162,31 +251,55 @@ export function TestScreen() {
         });
       }
     },
-    [setSession],
+    [recordDaily, saveCompleted, setSession],
   );
 
   const restart = useCallback(
     (options?: { reuseSeed?: boolean }) => {
       const current = engineStateRef.current;
-      const seed = options?.reuseSeed ? current.settings.seed : createSeed();
-      const nextState = makeTest(lengthKey, seed, theme);
-      restartArmedRef.current = false;
+      if (options?.reuseSeed) retryOfTestIdRef.current = savedTestIdRef.current;
+      else retryOfTestIdRef.current = null;
+      const seed = options?.reuseSeed
+        ? current.settings.seed
+        : (dailySeedRef.current ?? createSeed());
+      dailySeedRef.current = null;
+      const nextState = makeTest(mode, lengthKey, seed, theme, localSettings);
+      restartArmedAtRef.current = null;
+      setTabHintVisible(false);
+      if (!options?.reuseSeed) setResultDetails(null);
       setLiveStats({ wpm: 0, accuracy: 100, now: 0 });
       commitState(nextState);
       requestAnimationFrame(focusInput);
     },
-    [commitState, focusInput, lengthKey, theme],
+    [commitState, focusInput, lengthKey, localSettings, mode, theme],
   );
 
   useEffect(() => {
     hydrate();
-  }, [hydrate]);
+    hydrateLocalData();
+  }, [hydrate, hydrateLocalData]);
+
+  useEffect(() => {
+    restartRef.current = restart;
+  }, [restart]);
 
   useEffect(() => {
     if (!hydrated) return;
-    const frame = requestAnimationFrame(() => restart());
+    const frame = requestAnimationFrame(() => restartRef.current());
     return () => cancelAnimationFrame(frame);
-  }, [hydrated, lengthKey, restart]);
+  }, [
+    hydrated,
+    lengthKey,
+    localSettings.caretStyle,
+    localSettings.confidenceMode,
+    localSettings.difficulty,
+    localSettings.fontSize,
+    localSettings.numbers,
+    localSettings.punctuation,
+    localSettings.stopOnError,
+    mode,
+    theme,
+  ]);
 
   useEffect(() => {
     if (engineState.status !== "running") return;
@@ -229,55 +342,152 @@ export function TestScreen() {
         performance.now(),
       );
       if (nextState !== engineStateRef.current) {
-        restartArmedRef.current = false;
+        restartArmedAtRef.current = null;
+        setTabHintVisible(false);
         commitState(nextState);
       }
     },
     [commitState],
   );
 
+  const clearTabRestartHint = useCallback(() => {
+    restartArmedAtRef.current = null;
+    setTabHintVisible(false);
+    if (tabHintTimerRef.current) {
+      clearTimeout(tabHintTimerRef.current);
+      tabHintTimerRef.current = null;
+    }
+  }, []);
+
+  const showTabRestartHint = useCallback(() => {
+    restartArmedAtRef.current = armTabRestart(performance.now());
+    setTabHintVisible(true);
+    if (tabHintTimerRef.current) clearTimeout(tabHintTimerRef.current);
+    tabHintTimerRef.current = setTimeout(() => {
+      restartArmedAtRef.current = null;
+      setTabHintVisible(false);
+      tabHintTimerRef.current = null;
+    }, TAB_RESTART_HINT_MS);
+  }, []);
+
   const handleKeyDown = useCallback(
-    (event: KeyboardEvent<HTMLInputElement>) => {
-      if (event.nativeEvent.isComposing) return;
+    (event: globalThis.KeyboardEvent) => {
+      if (event.isComposing) return;
       const current = engineStateRef.current;
 
-      if (event.key === "Tab") {
+      if (
+        event.key === "Tab" &&
+        localSettings.quickRestartKey === "tab-enter"
+      ) {
+        if (event.shiftKey) return;
         event.preventDefault();
-        restartArmedRef.current = true;
+        showTabRestartHint();
+        focusInput();
         return;
       }
+
+      const tabAction =
+        localSettings.quickRestartKey === "tab-enter"
+          ? getTabRestartAction(
+              event.key,
+              restartArmedAtRef.current,
+              performance.now(),
+            )
+          : null;
+      if (tabAction === "restart") {
+        event.preventDefault();
+        clearTabRestartHint();
+        restart();
+        focusInput();
+        return;
+      }
+      if (tabAction === "cancel") {
+        clearTabRestartHint();
+      } else if (restartArmedAtRef.current !== null) {
+        clearTabRestartHint();
+      }
+
       if (event.key === "Enter") {
         event.preventDefault();
-        if (restartArmedRef.current) restart();
-        else if (current.status === "finished") restart({ reuseSeed: true });
+        if (current.status === "finished") {
+          restart({ reuseSeed: event.shiftKey });
+          focusInput();
+        }
         return;
       }
       if (event.key === "Escape") {
         event.preventDefault();
+        const now = performance.now();
+        const releaseFocus =
+          lastEscapeAtRef.current !== null &&
+          now - lastEscapeAtRef.current < 600;
+        lastEscapeAtRef.current = now;
+        if (releaseFocus) {
+          inputRef.current?.blur();
+          setFocused(false);
+          return;
+        }
         restart();
+        focusInput();
         return;
       }
       if (event.key === "Backspace") {
         event.preventDefault();
+        if (event.metaKey) return;
         dispatchInput(
           event.ctrlKey || event.altKey
             ? { type: "deleteWord" }
             : { type: "backspace" },
         );
+        focusInput();
         return;
       }
       if (event.ctrlKey || event.metaKey || event.altKey) return;
       if (event.key === " ") {
         event.preventDefault();
-        if (!event.repeat) dispatchInput({ type: "space" });
+        if (!event.repeat) {
+          dispatchInput({ type: "space" });
+          focusInput();
+        }
         return;
       }
       if (!event.repeat && Array.from(event.key).length === 1) {
         event.preventDefault();
         dispatchInput({ type: "char", char: event.key });
+        focusInput();
       }
     },
-    [dispatchInput, restart],
+    [
+      clearTabRestartHint,
+      dispatchInput,
+      focusInput,
+      restart,
+      showTabRestartHint,
+      localSettings.quickRestartKey,
+    ],
+  );
+
+  // The document listener is the single physical-key source of truth. The
+  // visually hidden input remains only for mobile keyboards and IME events.
+  useEffect(() => {
+    keyDownRef.current = handleKeyDown;
+  }, [handleKeyDown]);
+
+  useEffect(() => {
+    const listener = (event: globalThis.KeyboardEvent) => {
+      if (isEditableTarget(event.target, inputRef.current) || hasOpenModal())
+        return;
+      keyDownRef.current(event);
+    };
+    document.addEventListener("keydown", listener);
+    return () => document.removeEventListener("keydown", listener);
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (tabHintTimerRef.current) clearTimeout(tabHintTimerRef.current);
+    },
+    [],
   );
 
   const handleBeforeInput = useCallback(
@@ -324,15 +534,8 @@ export function TestScreen() {
 
   const measureCaret = useCallback(() => {
     const anchor = caretAnchorRef.current;
-    const viewport = viewportRef.current;
-    if (!anchor || !viewport) return;
-    const anchorRect = anchor.getBoundingClientRect();
-    const viewportRect = viewport.getBoundingClientRect();
-    setCaret({
-      x: anchorRect.left - viewportRect.left,
-      y: anchorRect.top - viewportRect.top,
-      height: anchorRect.height || 34,
-    });
+    if (!anchor) return;
+    setCaret(getCaretPosition(anchor));
   }, []);
 
   useLayoutEffect(() => {
@@ -340,32 +543,45 @@ export function TestScreen() {
     const anchor = caretAnchorRef.current;
     if (!viewport || !anchor || engineState.status === "finished") return;
 
-    const viewportRect = viewport.getBoundingClientRect();
-    const anchorRect = anchor.getBoundingClientRect();
-    const lineHeight = 56;
-    const relativeTop = anchorRect.top - viewportRect.top;
-    if (relativeTop > lineHeight * 1.75 || relativeTop < lineHeight * 0.25) {
-      const nextScroll = Math.max(
-        0,
-        viewport.scrollTop + relativeTop - lineHeight,
-      );
-      viewport.scrollTo({ top: nextScroll, behavior: "smooth" });
+    const nextScroll = getCaretScrollTop(
+      anchor.offsetTop,
+      viewport.clientHeight,
+      TYPING_LINE_HEIGHT_PX,
+    );
+    if (Math.abs(nextScroll - viewport.scrollTop) > 1) {
+      const reduceMotion = window.matchMedia(
+        "(prefers-reduced-motion: reduce)",
+      ).matches;
+      const reducedByPreference =
+        localSettings.reducedMotion === "on" ||
+        (localSettings.reducedMotion === "system" && reduceMotion);
+      viewport.scrollTo({
+        top: nextScroll,
+        behavior:
+          reducedByPreference || !localSettings.smoothCaret ? "auto" : "smooth",
+      });
     }
-    const frame = requestAnimationFrame(measureCaret);
-    return () => cancelAnimationFrame(frame);
-  }, [engineState, measureCaret]);
+    measureCaret();
+  }, [
+    engineState,
+    localSettings.reducedMotion,
+    localSettings.smoothCaret,
+    measureCaret,
+  ]);
 
   useEffect(() => {
     const viewport = viewportRef.current;
-    if (!viewport) return;
+    const lines = linesRef.current;
+    if (!viewport || !lines) return;
     const resizeObserver = new ResizeObserver(measureCaret);
     resizeObserver.observe(viewport);
-    viewport.addEventListener("scroll", measureCaret, { passive: true });
+    resizeObserver.observe(lines);
     window.addEventListener("resize", measureCaret);
+    const fontReady = document.fonts?.ready.then(measureCaret);
     return () => {
       resizeObserver.disconnect();
-      viewport.removeEventListener("scroll", measureCaret);
       window.removeEventListener("resize", measureCaret);
+      void fontReady;
     };
   }, [measureCaret]);
 
@@ -389,6 +605,10 @@ export function TestScreen() {
     if (nextLength !== lengthKey) setLengthKey(nextLength);
   };
 
+  const handleModeChange = (nextMode: Mode) => {
+    if (nextMode !== mode) setMode(nextMode);
+  };
+
   const currentResult: TestResult | null = result;
 
   return (
@@ -403,8 +623,9 @@ export function TestScreen() {
           <div className="flex flex-wrap gap-2">
             <SegmentedControl
               label="Test mode"
+              onValueChange={handleModeChange}
               options={modeOptions}
-              value="terms"
+              value={mode}
             />
             <SegmentedControl
               label="Test length"
@@ -420,28 +641,38 @@ export function TestScreen() {
             )}
           >
             <div>
-              <p className="text-xs text-muted">
-                {selectedLength.type === "time" ? "time" : "words"}
-              </p>
-              <p
-                className="font-mono text-sm text-foreground"
-                data-testid="test-progress"
-              >
-                {selectedLength.type === "time"
-                  ? timeRemaining
-                  : `${engineState.currentWordIndex}/${engineState.words.length}`}
-              </p>
+              {localSettings.showTimer ? (
+                <>
+                  <p className="text-xs text-muted">
+                    {selectedLength.type === "time" ? "time" : "words"}
+                  </p>
+                  <p
+                    className="font-mono text-sm text-foreground"
+                    data-testid="test-progress"
+                  >
+                    {selectedLength.type === "time"
+                      ? timeRemaining
+                      : `${engineState.currentWordIndex}/${engineState.words.length}`}
+                  </p>
+                </>
+              ) : (
+                <p className="text-xs text-muted">progress hidden</p>
+              )}
             </div>
             <div>
               <p className="text-xs text-muted">wpm</p>
               <p className="font-mono text-sm text-foreground">
-                {Math.round(liveStats.wpm)}
+                {localSettings.showLiveWpm && !localSettings.blindMode
+                  ? Math.round(liveStats.wpm)
+                  : "—"}
               </p>
             </div>
             <div>
               <p className="text-xs text-muted">accuracy</p>
               <p className="font-mono text-sm text-foreground">
-                {liveStats.accuracy.toFixed(0)}%
+                {localSettings.showLiveAccuracy && !localSettings.blindMode
+                  ? `${liveStats.accuracy.toFixed(0)}%`
+                  : "—"}
               </p>
             </div>
           </div>
@@ -464,8 +695,8 @@ export function TestScreen() {
             onCut={preventTransfer}
             onDrop={preventTransfer}
             onFocus={() => setFocused(true)}
-            onKeyDown={handleKeyDown}
             onPaste={preventTransfer}
+            ref={inputRef}
             spellCheck={false}
             value=""
           />
@@ -475,6 +706,8 @@ export function TestScreen() {
               onNextTest={() => restart()}
               onTryAgain={() => restart({ reuseSeed: true })}
               result={currentResult}
+              details={resultDetails}
+              reducedMotion={localSettings.reducedMotion}
             />
           ) : (
             <>
@@ -484,12 +717,27 @@ export function TestScreen() {
                   !focused &&
                     engineState.status === "running" &&
                     "opacity-45 blur-[2px]",
+                  localSettings.blindMode &&
+                    "[&_.text-incorrect]:text-foreground",
                 )}
                 data-testid="typing-viewport"
                 ref={viewportRef}
-                style={{ height: "168px", lineHeight: "56px" }}
+                style={{
+                  height: `${TYPING_LINE_HEIGHT_PX * 3}px`,
+                  lineHeight: `${TYPING_LINE_HEIGHT_PX}px`,
+                }}
               >
-                <div className="font-mono text-[clamp(1.25rem,2.4vw,1.8rem)] tracking-[-0.035em]">
+                <div
+                  className={cn(
+                    "relative font-mono tracking-[-0.035em]",
+                    localSettings.fontSize === "small" && "text-lg",
+                    localSettings.fontSize === "large" && "text-3xl",
+                    localSettings.fontSize === "xl" && "text-4xl",
+                    localSettings.fontSize === "medium" &&
+                      "text-[clamp(1.25rem,2.4vw,1.8rem)]",
+                  )}
+                  ref={linesRef}
+                >
                   {engineState.words.map((word, index) => (
                     <TypingWord
                       active={index === engineState.currentWordIndex}
@@ -505,10 +753,14 @@ export function TestScreen() {
                     "pointer-events-none absolute top-0 left-0 z-10 bg-accent transition-transform duration-100 motion-reduce:transition-none",
                     engineState.settings.caretStyle === "block"
                       ? "w-[0.62em] opacity-45"
-                      : "w-[2px]",
+                      : engineState.settings.caretStyle === "underline"
+                        ? "h-[2px] w-[0.62em]"
+                        : "w-[2px]",
+                    localSettings.largerCaret && "scale-x-150",
                     engineState.status === "idle" &&
                       "motion-safe:animate-[caret-blink_1.05s_steps(1,end)_infinite]",
                   )}
+                  data-testid="caret"
                   style={{
                     height: `${caret.height}px`,
                     transform: `translate3d(${caret.x}px, ${caret.y}px, 0)`,
@@ -539,6 +791,11 @@ export function TestScreen() {
           </span>
           <Kbd>esc</Kbd>
           <span>restart</span>
+          {tabHintVisible ? (
+            <span className="ml-2 text-accent" role="status">
+              Press <Kbd>Enter</Kbd> to restart
+            </span>
+          ) : null}
           <span className="sr-only" data-testid="engine-status">
             {engineState.status}
           </span>
