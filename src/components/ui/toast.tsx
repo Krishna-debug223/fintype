@@ -30,6 +30,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           message ? "opacity-100" : "opacity-0",
         )}
         role="status"
+        data-focus-chrome
       >
         {message}
       </div>

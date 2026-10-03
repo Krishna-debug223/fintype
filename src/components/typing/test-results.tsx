@@ -136,12 +136,14 @@ export function TestResults({
   result,
   onTryAgain,
   onNextTest,
+  onViewHistory,
   details,
   reducedMotion = "system",
 }: {
   result: TestResult;
   onTryAgain: () => void;
   onNextTest: () => void;
+  onViewHistory: () => void;
   details: ResultDetails | null;
   reducedMotion?: UserSettings["reducedMotion"];
 }) {
@@ -381,6 +383,9 @@ export function TestResults({
           </Button>
           <Button onClick={onNextTest}>
             Next test <Kbd className="ml-2">enter</Kbd>
+          </Button>
+          <Button onClick={onViewHistory} variant="secondary">
+            View history
           </Button>
           <Button onClick={share} variant="ghost">
             Share

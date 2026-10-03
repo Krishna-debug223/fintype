@@ -4,6 +4,11 @@ FinType is a finance-native typing platform for the words, figures, and formulas
 
 Prompt 4 adds durable browser-local history, personal bests, daily records, rich result analysis, and the History, Stats, Settings, Daily, Leaderboard, and About routes. Prompt 5 adds an optional Neon/Postgres/Auth.js layer: deterministic server replay validation, idempotent submissions, profile/account routes, settings sync, reviewable anti-cheat flags, admin actions, Redis-aware limits, and server-backed leaderboards. Guest mode remains fully local when server variables are absent.
 
+The current release adds Monkeytype-style focus mode, a large countdown/progress
+timer, primary header navigation, green accent themes, and content version 2.
+Read [`CONTENT.md`](CONTENT.md) for pool/version rules and
+[`CHANGE-REPORT.md`](CHANGE-REPORT.md) for the release decisions.
+
 ## Tech stack
 
 - Next.js 16 App Router, React 19, and strict TypeScript (Webpack production builds for restricted CI compatibility)
@@ -41,6 +46,7 @@ pnpm test         # Vitest unit/component suite
 pnpm test:e2e     # Playwright suite (install browsers first)
 pnpm db:migrate   # apply db/migrations to DATABASE_URL
 pnpm db:seed      # local demo profile (refuses production)
+pnpm content:stats # pool sizes and repeat simulation
 ```
 
 Install Playwright's Chromium browser once before the end-to-end suite:
@@ -74,14 +80,14 @@ Each major folder includes an `index.ts` or local README that states its boundar
 
 ## Design system and theming
 
-The default visual direction is a restrained market terminal after hours: charcoal surfaces, subtle grid structure, tabular cues, and an amber focus color. Four themes ship now:
+The default visual direction is a restrained market terminal after hours: charcoal surfaces, subtle grid structure, tabular cues, and a mint-green focus color. Four themes ship now:
 
-- `dark`: charcoal, soft grey, and amber
-- `light`: neutral paper surfaces and deep green
-- `terminal`: amber on near-black
+- `dark`: charcoal, soft grey, and `#3ddc84`
+- `light`: neutral paper surfaces and `#176b4d`
+- `terminal`: green phosphor `#32ff66` on pure black
 - `wallstreet`: navy and gold
 
-Semantic roles—background, surface, border, text, muted text, accent, correct, incorrect, and warning—are defined as CSS variables in `src/app/globals.css`. Tailwind maps utilities to those variables, so changing `data-theme` on `<html>` updates the whole interface without remounting components.
+Semantic roles—background, surface, border, text, muted text, accent, correct, incorrect, and warning—are defined as CSS variables in `src/app/globals.css`. Tailwind maps utilities to those variables, so changing `data-theme` on `<html>` updates the whole interface without remounting components. Wallstreet deliberately keeps its gold identity.
 
 `ThemeProvider` owns the typed runtime API, persists the selected theme through the local-data repository, and applies it to the document root. Inter is used for interface copy and JetBrains Mono for typing and data-oriented surfaces. Motion is subtle and disabled through `prefers-reduced-motion`.
 

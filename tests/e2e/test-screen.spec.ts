@@ -84,7 +84,15 @@ test("keeps typing alive after focus leaves the hidden input", async ({
   await page.keyboard.type(firstWord ?? "");
   await expect(page.getByTestId("engine-status")).toHaveText("running");
 
-  await page.getByRole("link", { name: "FinType home" }).click();
+  await page.waitForTimeout(350);
+  await page
+    .getByTestId("focus-mode-wrapper")
+    .dispatchEvent("pointermove", { movementX: 12, movementY: 0 });
+  await expect(page.locator("body")).not.toHaveAttribute(
+    "data-focus-mode",
+    "on",
+  );
+  await page.reload();
   await page.getByRole("button", { name: "15s" }).click();
   await input.focus();
   await page.getByRole("link", { name: "FinType home" }).focus();

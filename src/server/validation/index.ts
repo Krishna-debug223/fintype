@@ -1,4 +1,4 @@
-import { getDailySeed, getModeWords } from "@/content";
+import { CONTENT_VERSION, getDailySeed, getModeWords } from "@/content";
 import { replay } from "@/engine";
 import { isPrintableCharacter } from "@/engine/text";
 import type {
@@ -56,6 +56,7 @@ const settingsSchema = z.object({
   theme: z.enum(["dark", "light", "terminal", "wallstreet"]),
   fontSize: z.enum(["small", "medium", "large", "xl"]),
   caretStyle: z.enum(["line", "block", "underline"]),
+  contentVersion: z.number().int().positive().optional(),
 });
 const logEntrySchema = z.discriminatedUnion("type", [
   z.object({
@@ -89,6 +90,7 @@ export const submissionPayloadSchema = z.object({
   length: lengthSchema,
   settings: settingsSchema,
   seed: z.string().min(1).max(160),
+  contentVersion: z.number().int().positive().optional(),
   keystrokeLog: z.array(logEntrySchema).max(ANTI_CHEAT.maxLogEntries),
   clientCreatedAt: z.string().datetime(),
   retryOf: z.string().uuid().nullable().optional(),
@@ -169,8 +171,19 @@ function sameLength(left: TestLength, right: TestLength): boolean {
   );
 }
 
-function wordCountFor(length: TestLength): number {
-  return length.type === "words" ? length.words : 320;
+function wordCountFor(
+  length: TestLength,
+  contentVersion: number = CONTENT_VERSION,
+): number {
+  if (contentVersion === 1) return length.type === "words" ? length.words : 320;
+  if (length.type === "words") return length.words;
+  return length.seconds === 15
+    ? 100
+    : length.seconds === 30
+      ? 200
+      : length.seconds === 60
+        ? 350
+        : 650;
 }
 
 function getClaimed(
@@ -251,6 +264,9 @@ export function validateSubmission(
   const parsed = submissionPayloadSchema.safeParse(input);
   if (!parsed.success) return reject(["invalid-payload"]);
   const payload = parsed.data;
+  const contentVersion = payload.contentVersion ?? CONTENT_VERSION;
+  if (contentVersion !== 1 && contentVersion !== CONTENT_VERSION)
+    return reject(["unknown-content-version"]);
   if (!modeLengthAllowed(payload.mode, payload.length))
     return reject(["invalid-mode-length"]);
   if (
@@ -287,12 +303,14 @@ export function validateSubmission(
     mode: payload.mode,
     length: payload.length,
     seed: payload.seed,
+    contentVersion,
   };
   const words = getModeWords(
     payload.mode,
-    wordCountFor(payload.length),
+    wordCountFor(payload.length, contentVersion),
     payload.seed,
     payload.settings.difficulty as Difficulty,
+    { contentVersion },
   );
   const result = replay(words, settings, payload.keystrokeLog);
   const durationLimit =

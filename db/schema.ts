@@ -109,6 +109,7 @@ export const tests = pgTable(
     numbers: boolean("numbers").notNull(),
     stopOnError: boolean("stop_on_error").notNull(),
     confidenceMode: boolean("confidence_mode").notNull(),
+    contentVersion: integer("content_version").notNull().default(1),
     seed: text("seed").notNull(),
     wpm: numeric("wpm", { precision: 8, scale: 2 }).notNull(),
     rawWpm: numeric("raw_wpm", { precision: 8, scale: 2 }).notNull(),

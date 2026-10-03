@@ -84,6 +84,7 @@ export const savedTestSchema = z.object({
   synced: z.boolean(),
   schemaVersion: z.number().int().positive(),
   retryOfTestId: z.string().nullable(),
+  contentVersion: z.number().int().positive().default(1),
 });
 
 export const userSettingsSchema = z.object({
@@ -106,6 +107,7 @@ export const userSettingsSchema = z.object({
   reducedMotion: z.enum(["system", "on", "off"]),
   highContrast: z.boolean(),
   largerCaret: z.boolean(),
+  focusMode: z.boolean().default(true),
 });
 
 export const localProfileSchema = z.object({
@@ -129,6 +131,7 @@ export const dailyRecordSchema = z.object({
   wpm: z.number().finite().nonnegative(),
   accuracy: z.number().finite().min(0).max(100),
   testId: z.string().min(1),
+  contentVersion: z.number().int().positive().default(1),
 });
 
 export const repositoryExportSchema = z.object({

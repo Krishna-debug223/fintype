@@ -87,8 +87,8 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   fontSize: "medium",
   caretStyle: "line",
   smoothCaret: true,
-  showLiveWpm: true,
-  showLiveAccuracy: true,
+  showLiveWpm: false,
+  showLiveAccuracy: false,
   showTimer: true,
   defaultMode: "terms",
   defaultLength: { type: "time", seconds: 30 },
@@ -102,6 +102,7 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   reducedMotion: "system",
   highContrast: false,
   largerCaret: false,
+  focusMode: true,
 };
 
 function getStorage(storage?: StorageLike): StorageLike | null {
@@ -167,6 +168,7 @@ export function migrateTestsPayload(value: unknown): unknown {
         ...old,
         schemaVersion: CURRENT_SCHEMA_VERSION,
         retryOfTestId: old.retryOfTestId ?? null,
+        contentVersion: old.contentVersion ?? 1,
         synced: old.synced ?? false,
         eligibleForLeaderboard:
           old.eligibleForLeaderboard ?? old.mode !== "custom",
@@ -293,6 +295,7 @@ function toSavedTest(
     synced: false,
     schemaVersion: CURRENT_SCHEMA_VERSION,
     retryOfTestId: options.retryOfTestId ?? null,
+    contentVersion: result.settings.contentVersion ?? 2,
   };
 }
 

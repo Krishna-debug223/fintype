@@ -18,6 +18,7 @@
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
     "db:seed": "tsx db/seed.ts",
+    "content:stats": "tsx scripts/content-stats.ts",
     "db:reset": "docker compose down -v && docker compose up -d postgres && pnpm db:migrate",
     "prepare": "husky"
   },
@@ -29,6 +30,7 @@
     "@upstash/ratelimit": "^2.2.0",
     "@upstash/redis": "^1.39.0",
     "drizzle-orm": "^0.45.3",
+    "lucide-react": "^1.50.0",
     "next": "16.3.8",
     "next-auth": "^4.24.15",
     "nodemailer": "^10.0.13",

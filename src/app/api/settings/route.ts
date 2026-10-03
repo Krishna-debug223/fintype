@@ -46,6 +46,7 @@ const settingsSchema = z.object({
   reducedMotion: z.enum(["system", "on", "off"]),
   highContrast: z.boolean(),
   largerCaret: z.boolean(),
+  focusMode: z.boolean().default(true),
 });
 
 export async function GET() {

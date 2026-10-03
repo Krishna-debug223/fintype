@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useRouter } from "next/navigation";
 import type {
   ClipboardEvent,
   CompositionEvent,
@@ -49,6 +50,8 @@ import {
   TAB_RESTART_HINT_MS,
 } from "./interaction";
 import { TypingWord } from "./typing-word";
+import { useFocusMode } from "./focus-mode";
+import { formatTimerValue, isTimerWarning, timerAnnouncement } from "./timer";
 
 const modeOptions = [
   { label: "terms", value: "terms" },
@@ -98,12 +101,20 @@ function createSettings(
     fontSize: preferences.fontSize,
     caretStyle: preferences.caretStyle,
     seed,
+    contentVersion: 2,
   };
 }
 
 function wordCountFor(lengthKey: TestLengthKey): number {
   const length = parseTestLength(lengthKey);
-  return length.type === "words" ? length.words : 320;
+  if (length.type === "words") return length.words;
+  return length.seconds === 15
+    ? 100
+    : length.seconds === 30
+      ? 200
+      : length.seconds === 60
+        ? 350
+        : 650;
 }
 
 function makeTest(
@@ -138,6 +149,7 @@ function hasOpenModal(): boolean {
 }
 
 export function TestScreen() {
+  const router = useRouter();
   const { theme } = useTheme();
   const lengthKey = useTestSessionStore((state) => state.settings.lengthKey);
   const mode = useTestSessionStore((state) => state.settings.mode);
@@ -151,6 +163,13 @@ export function TestScreen() {
   const recordDaily = useLocalDataStore((state) => state.recordDaily);
   const localSettings = useLocalDataStore((state) => state.settings);
   const hydrateLocalData = useLocalDataStore((state) => state.hydrate);
+  const {
+    active: focusActive,
+    enter: enterFocusMode,
+    exit: exitFocusMode,
+    onPointerMove: handleFocusPointerMove,
+    onTouchStart: handleFocusTouchStart,
+  } = useFocusMode(localSettings.focusMode);
 
   const initialState = useMemo(
     () =>
@@ -189,6 +208,7 @@ export function TestScreen() {
     accuracy: 100,
     now: 0,
   });
+  const [timerNow, setTimerNow] = useState(0);
   const [caret, setCaret] = useState({ x: 0, y: 0, height: 34 });
   const [resultDetails, setResultDetails] = useState<{
     isPersonalBest: boolean;
@@ -219,6 +239,7 @@ export function TestScreen() {
         nextState.status === "finished" ? getResult(nextState) : null;
       setSession(nextState.status, nextResult);
       if (nextResult) {
+        exitFocusMode();
         const resultKey = `${nextResult.seed}:${nextState.endTimestampMs ?? "finished"}`;
         if (savedResultKeyRef.current !== resultKey) {
           const retryOfTestId = retryOfTestIdRef.current;
@@ -241,6 +262,7 @@ export function TestScreen() {
               wpm: nextResult.wpm,
               accuracy: nextResult.accuracy,
               testId: outcome.test.id,
+              contentVersion: nextResult.settings.contentVersion ?? 2,
             });
           }
         }
@@ -249,9 +271,10 @@ export function TestScreen() {
           accuracy: nextResult.accuracy,
           now: nextState.endTimestampMs ?? 0,
         });
+        setTimerNow(nextState.endTimestampMs ?? 0);
       }
     },
-    [recordDaily, saveCompleted, setSession],
+    [exitFocusMode, recordDaily, saveCompleted, setSession],
   );
 
   const restart = useCallback(
@@ -264,20 +287,47 @@ export function TestScreen() {
         : (dailySeedRef.current ?? createSeed());
       dailySeedRef.current = null;
       const nextState = makeTest(mode, lengthKey, seed, theme, localSettings);
+      exitFocusMode();
       restartArmedAtRef.current = null;
       setTabHintVisible(false);
       if (!options?.reuseSeed) setResultDetails(null);
       setLiveStats({ wpm: 0, accuracy: 100, now: 0 });
+      setTimerNow(0);
       commitState(nextState);
       requestAnimationFrame(focusInput);
     },
-    [commitState, focusInput, lengthKey, localSettings, mode, theme],
+    [
+      commitState,
+      exitFocusMode,
+      focusInput,
+      lengthKey,
+      localSettings,
+      mode,
+      theme,
+    ],
   );
 
   useEffect(() => {
     hydrate();
     hydrateLocalData();
   }, [hydrate, hydrateLocalData]);
+
+  useEffect(() => {
+    const onBlur = () => exitFocusMode();
+    window.addEventListener("blur", onBlur);
+    const observer = new MutationObserver(() => {
+      if (hasOpenModal()) exitFocusMode();
+    });
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+    });
+    return () => {
+      window.removeEventListener("blur", onBlur);
+      observer.disconnect();
+    };
+  }, [exitFocusMode]);
 
   useEffect(() => {
     restartRef.current = restart;
@@ -309,6 +359,7 @@ export function TestScreen() {
     const tick = (now: number) => {
       const current = engineStateRef.current;
       if (current.status !== "running") return;
+      setTimerNow(now);
 
       if (
         current.settings.length.type === "time" &&
@@ -317,6 +368,7 @@ export function TestScreen() {
         const deadline =
           current.startTimestampMs + current.settings.length.seconds * 1000;
         if (now >= deadline) {
+          exitFocusMode();
           commitState(finishTest(current, deadline));
           return;
         }
@@ -332,22 +384,24 @@ export function TestScreen() {
 
     animationFrame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(animationFrame);
-  }, [commitState, engineState.status]);
+  }, [commitState, engineState.status, exitFocusMode]);
 
   const dispatchInput = useCallback(
     (input: TestInput) => {
-      const nextState = applyInput(
-        engineStateRef.current,
-        input,
-        performance.now(),
-      );
-      if (nextState !== engineStateRef.current) {
+      const previous = engineStateRef.current;
+      const now = performance.now();
+      const nextState = applyInput(previous, input, now);
+      if (nextState !== previous) {
+        setTimerNow(now);
+        if (previous.status === "idle" && nextState.status === "running")
+          enterFocusMode(now);
+        if (nextState.status === "finished") exitFocusMode();
         restartArmedAtRef.current = null;
         setTabHintVisible(false);
         commitState(nextState);
       }
     },
-    [commitState],
+    [commitState, enterFocusMode, exitFocusMode],
   );
 
   const clearTabRestartHint = useCallback(() => {
@@ -595,11 +649,39 @@ export function TestScreen() {
             Math.ceil(
               (engineState.startTimestampMs +
                 selectedLength.seconds * 1000 -
-                liveStats.now) /
+                timerNow) /
                 1000,
             ),
           )
       : null;
+  const completedWordCount =
+    engineState.status === "finished"
+      ? engineState.words.length
+      : engineState.currentWordIndex;
+  const timerMode = selectedLength.type === "time" ? "time" : "words";
+  const timerValue =
+    selectedLength.type === "time" ? (timeRemaining ?? 0) : completedWordCount;
+  const timerText = formatTimerValue(
+    timerMode,
+    timerValue,
+    engineState.words.length,
+  );
+  const timerWarning =
+    selectedLength.type === "time" && isTimerWarning(timeRemaining);
+  const lastTimerAnnouncementRef = useRef("");
+  const [timerAnnouncementText, setTimerAnnouncementText] = useState("");
+  useEffect(() => {
+    const candidate = timerAnnouncement(
+      engineState.status,
+      timerMode,
+      timerValue,
+      engineState.words.length,
+    );
+    if (candidate && candidate !== lastTimerAnnouncementRef.current) {
+      lastTimerAnnouncementRef.current = candidate;
+      setTimerAnnouncementText(candidate);
+    }
+  }, [engineState.status, engineState.words.length, timerMode, timerValue]);
 
   const handleLengthChange = (nextLength: TestLengthKey) => {
     if (nextLength !== lengthKey) setLengthKey(nextLength);
@@ -612,14 +694,27 @@ export function TestScreen() {
   const currentResult: TestResult | null = result;
 
   return (
-    <section className="mx-auto flex w-full max-w-6xl flex-1 flex-col justify-center px-4 py-10 sm:px-6 sm:py-16">
+    <section
+      className={cn(
+        "mx-auto flex w-full max-w-6xl flex-1 flex-col justify-center px-4 py-10 sm:px-6 sm:py-16",
+        focusActive && "cursor-none",
+      )}
+      data-focus-mode-wrapper={focusActive ? "active" : "idle"}
+      data-testid="focus-mode-wrapper"
+      onPointerMove={handleFocusPointerMove}
+      onTouchStart={handleFocusTouchStart}
+    >
       <h1 className="sr-only">FinType finance typing test</h1>
       <Card
         className="overflow-hidden"
         data-seed={engineState.settings.seed}
         data-testid="test-card"
       >
-        <div className="flex flex-col gap-3 border-b border-border bg-background/35 px-4 py-4 lg:flex-row lg:items-center lg:justify-between lg:px-6">
+        <div
+          className="flex flex-col gap-3 border-b border-border bg-background/35 px-4 py-4 transition-opacity duration-200 lg:flex-row lg:items-center lg:justify-between lg:px-6"
+          data-focus-chrome
+          data-testid="test-controls"
+        >
           <div className="flex flex-wrap gap-2">
             <SegmentedControl
               label="Test mode"
@@ -633,48 +728,6 @@ export function TestScreen() {
               options={lengthOptions}
               value={lengthKey}
             />
-          </div>
-          <div
-            className={cn(
-              "grid min-w-52 grid-cols-3 gap-5 px-1 text-right transition-opacity",
-              engineState.status === "idle" && "opacity-55",
-            )}
-          >
-            <div>
-              {localSettings.showTimer ? (
-                <>
-                  <p className="text-xs text-muted">
-                    {selectedLength.type === "time" ? "time" : "words"}
-                  </p>
-                  <p
-                    className="font-mono text-sm text-foreground"
-                    data-testid="test-progress"
-                  >
-                    {selectedLength.type === "time"
-                      ? timeRemaining
-                      : `${engineState.currentWordIndex}/${engineState.words.length}`}
-                  </p>
-                </>
-              ) : (
-                <p className="text-xs text-muted">progress hidden</p>
-              )}
-            </div>
-            <div>
-              <p className="text-xs text-muted">wpm</p>
-              <p className="font-mono text-sm text-foreground">
-                {localSettings.showLiveWpm && !localSettings.blindMode
-                  ? Math.round(liveStats.wpm)
-                  : "—"}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-muted">accuracy</p>
-              <p className="font-mono text-sm text-foreground">
-                {localSettings.showLiveAccuracy && !localSettings.blindMode
-                  ? `${liveStats.accuracy.toFixed(0)}%`
-                  : "—"}
-              </p>
-            </div>
           </div>
         </div>
 
@@ -705,12 +758,56 @@ export function TestScreen() {
             <TestResults
               onNextTest={() => restart()}
               onTryAgain={() => restart({ reuseSeed: true })}
+              onViewHistory={() => {
+                router.push("/history");
+              }}
               result={currentResult}
               details={resultDetails}
               reducedMotion={localSettings.reducedMotion}
             />
           ) : (
             <>
+              <div
+                className="mb-6 flex items-end gap-4"
+                data-testid="timer-block"
+              >
+                {localSettings.showTimer ? (
+                  <p
+                    className={cn(
+                      "font-mono text-[clamp(2.5rem,6vw,3.5rem)] leading-none tracking-[-0.06em] text-accent tabular-nums transition-[opacity,color,filter] duration-200",
+                      engineState.status === "idle" && "opacity-50",
+                      timerWarning &&
+                        "brightness-125 motion-safe:animate-[timer-pulse_1.4s_ease-in-out_infinite]",
+                    )}
+                    data-testid="timer"
+                    data-warning={timerWarning ? "true" : "false"}
+                  >
+                    {timerText}
+                  </p>
+                ) : null}
+                <span className="sr-only" data-testid="test-progress">
+                  {timerText}
+                </span>
+                <div
+                  className="flex gap-3 pb-1 font-mono text-xs text-muted"
+                  data-testid="live-stats"
+                >
+                  {localSettings.showLiveWpm && !localSettings.blindMode ? (
+                    <span>{Math.round(liveStats.wpm)} wpm</span>
+                  ) : null}
+                  {localSettings.showLiveAccuracy &&
+                  !localSettings.blindMode ? (
+                    <span>{liveStats.accuracy.toFixed(0)}%</span>
+                  ) : null}
+                </div>
+              </div>
+              <div
+                aria-live="polite"
+                className="sr-only"
+                data-testid="timer-announcements"
+              >
+                {timerAnnouncementText}
+              </div>
               <div
                 className={cn(
                   "relative overflow-hidden transition-[filter,opacity] duration-150",
@@ -781,7 +878,11 @@ export function TestScreen() {
           )}
         </div>
 
-        <div className="flex flex-wrap items-center justify-center gap-2 border-t border-border px-4 py-4 text-sm text-muted">
+        <div
+          className="flex flex-wrap items-center justify-center gap-2 border-t border-border px-4 py-4 text-sm text-muted transition-opacity duration-200"
+          data-focus-chrome
+          data-testid="keyboard-hints"
+        >
           <Kbd>tab</Kbd>
           <span>then</span>
           <Kbd>enter</Kbd>

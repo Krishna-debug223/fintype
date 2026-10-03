@@ -40,10 +40,26 @@ function analysisFor(test: SavedTest) {
     fontSize: "medium",
     caretStyle: "line",
     seed: test.seed,
+    contentVersion: test.contentVersion ?? 1,
   };
-  const count = test.length.type === "words" ? test.length.words : 320;
+  const count =
+    (test.contentVersion ?? 1) === 1
+      ? test.length.type === "words"
+        ? test.length.words
+        : 320
+      : test.length.type === "words"
+        ? test.length.words
+        : test.length.seconds === 15
+          ? 100
+          : test.length.seconds === 30
+            ? 200
+            : test.length.seconds === 60
+              ? 350
+              : 650;
   let state = createTest(
-    getModeWords(test.mode, count, test.seed, test.difficulty),
+    getModeWords(test.mode, count, test.seed, test.difficulty, {
+      contentVersion: test.contentVersion ?? 1,
+    }),
     settings,
   );
   test.keystrokeLog.forEach((entry) => {

@@ -34,6 +34,8 @@ export interface TestSettings {
   caretStyle: CaretStyle;
   /** Stable identifier used to regenerate this test's content. */
   seed: string;
+  /** Versioned content snapshot used for deterministic replay. */
+  contentVersion?: number;
 }
 
 export type CharState =
@@ -99,6 +101,8 @@ export interface SavedTest {
   synced: boolean;
   schemaVersion: number;
   retryOfTestId: string | null;
+  /** Defaults to v1 when reading records created before content versioning. */
+  contentVersion?: number;
 }
 
 export interface UserSettings {
@@ -121,6 +125,7 @@ export interface UserSettings {
   reducedMotion: "system" | "on" | "off";
   highContrast: boolean;
   largerCaret: boolean;
+  focusMode: boolean;
 }
 
 export interface LocalProfile {
@@ -144,6 +149,7 @@ export interface DailyRecord {
   wpm: number;
   accuracy: number;
   testId: string;
+  contentVersion?: number;
 }
 
 export type RankTitle =

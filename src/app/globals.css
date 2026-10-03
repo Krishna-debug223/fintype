@@ -23,10 +23,10 @@
   --theme-border: #373a42;
   --theme-text: #e7e8eb;
   --theme-text-muted: #8c909a;
-  --theme-accent: #e8b34f;
+  --theme-accent: #3ddc84;
   --theme-correct: #67c587;
   --theme-incorrect: #ef6a72;
-  --theme-warning: #e5a84b;
+  --theme-warning: #d98a4e;
 }
 
 [data-theme="light"] {
@@ -39,20 +39,20 @@
   --theme-accent: #176b4d;
   --theme-correct: #16834f;
   --theme-incorrect: #c53b48;
-  --theme-warning: #9a6500;
+  --theme-warning: #8a4b2f;
 }
 
 [data-theme="terminal"] {
   color-scheme: dark;
-  --theme-background: #090a08;
-  --theme-surface: #11130e;
-  --theme-border: #3b3b24;
-  --theme-text: #f0c96d;
+  --theme-background: #000000;
+  --theme-surface: #050a05;
+  --theme-border: #16441f;
+  --theme-text: #d7ffdf;
   --theme-text-muted: #806f43;
-  --theme-accent: #ffb000;
-  --theme-correct: #f0c96d;
-  --theme-incorrect: #ff614d;
-  --theme-warning: #ffca4b;
+  --theme-accent: #32ff66;
+  --theme-correct: #d7ffdf;
+  --theme-incorrect: #ff6b6b;
+  --theme-warning: #8dff9c;
 }
 
 [data-theme="wallstreet"] {
@@ -114,6 +114,45 @@ body {
   }
 }
 
+@keyframes timer-pulse {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.18);
+  }
+}
+
+[data-focus-mode="on"] [data-focus-chrome] {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 180ms ease,
+    visibility 0ms linear 180ms;
+}
+
+[data-focus-mode="off"] [data-focus-chrome],
+body:not([data-focus-mode]) [data-focus-chrome] {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition:
+    opacity 180ms ease,
+    visibility 0ms linear 0ms;
+}
+
+[data-theme="terminal"] body {
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+}
+
+[data-active-character="true"] {
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 0.22em;
+}
+
 @keyframes dialog-in {
   from {
     opacity: 0;
@@ -143,4 +182,10 @@ body {
   animation-duration: 0.01ms !important;
   animation-iteration-count: 1 !important;
   transition-duration: 0.01ms !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-focus-mode="on"] [data-focus-chrome] {
+    transition: none;
+  }
 }

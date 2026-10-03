@@ -279,6 +279,7 @@ export default function SettingsPage() {
                 ["blindMode", "Blind mode"],
                 ["highContrast", "High contrast"],
                 ["largerCaret", "Larger caret"],
+                ["focusMode", "Focus mode while typing"],
               ] as const
             ).map(([key, label]) => (
               <label

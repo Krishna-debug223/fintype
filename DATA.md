@@ -17,6 +17,14 @@ Every structured key is validated with Zod. Reads and writes are wrapped in `try
 
 Export files use `exportVersion: 1` and include tests, settings, profile, personal bests, and daily records. Merge imports dedupe by test id; replace imports replace the local collection.
 
+## Content versions
+
+New completed tests persist `contentVersion: 2`. Existing test envelopes and
+daily records without the field migrate to `1`, preserving the frozen v1
+generator. History replay, retry, stats analysis, and server submissions pass
+the stored version back to `getModeWords`; unknown server versions are rejected.
+The `focusMode` setting is also migrated field-by-field with a default of true.
+
 ## Rules
 
 - A result is saved only when the engine reaches `finished`; Escape/restart before completion is never persisted.
