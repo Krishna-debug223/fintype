@@ -1,6 +1,7 @@
 import { and, eq, sql } from "drizzle-orm";
 
 import type { TestResult } from "@/types";
+import { CONTENT_VERSION } from "@/content";
 
 import { getDatabase } from "./db";
 import {
@@ -141,7 +142,7 @@ export async function submitForUser(
       numbers: payload.data.settings.numbers,
       stopOnError: payload.data.settings.stopOnError,
       confidenceMode: payload.data.settings.confidenceMode,
-      contentVersion: payload.data.contentVersion ?? 2,
+      contentVersion: payload.data.contentVersion ?? CONTENT_VERSION,
       seed: payload.data.seed,
       wpm: result.wpm.toFixed(2),
       rawWpm: result.rawWpm.toFixed(2),

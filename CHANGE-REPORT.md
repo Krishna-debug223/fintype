@@ -29,10 +29,14 @@ do not carry the only meaning.
 
 ## Content
 
-Content v1 is frozen. Content v2 expands the pools, adds deterministic formula
-generation, and uses shuffle-and-draw without within-test repeats until the
-filtered pool is exhausted. See `CONTENT.md` and `pnpm content:stats` for live
-counts and simulation output.
+Content v1 is frozen. Content v3 replaces synthetic compound generation with a
+source-grounded finance lexicon: common reporting, accounting, modelling,
+markets, banking, and risk words are explicit entries, with frequency tiers
+that favor everyday professional vocabulary. Established finance phrases and
+symbols remain available, but synthetic `root-modifier` combinations are gone.
+The deterministic formula generation and shuffle-and-draw behavior remain in
+place without within-test repeats until the filtered pool is exhausted. See
+`CONTENT.md` and `pnpm content:stats` for live counts and simulation output.
 
 ## Assumptions and deviations
 

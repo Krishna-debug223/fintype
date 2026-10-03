@@ -2,12 +2,24 @@ import { describe, expect, it } from "vitest";
 
 import { CONTENT_POOLS, CONTENT_VERSION, getModeWords } from "@/content";
 
-describe("content v2", () => {
+describe("content v3", () => {
   it("ships the required pool sizes", () => {
-    expect(CONTENT_VERSION).toBe(2);
+    expect(CONTENT_VERSION).toBe(3);
     expect(CONTENT_POOLS.terms.length).toBeGreaterThanOrEqual(1800);
     expect(CONTENT_POOLS.office.length).toBeGreaterThanOrEqual(900);
     expect(CONTENT_POOLS.excel.length).toBeGreaterThanOrEqual(300);
+  });
+
+  it("is mostly real single-token finance vocabulary", () => {
+    const hyphenated = CONTENT_POOLS.terms.filter((item) =>
+      item.text.includes("-"),
+    );
+    expect(hyphenated.length / CONTENT_POOLS.terms.length).toBeLessThan(0.15);
+    expect(
+      ["revenue", "earnings", "cashflow", "liquidity", "guidance"].every(
+        (term) => CONTENT_POOLS.terms.some((item) => item.text === term),
+      ),
+    ).toBe(true);
   });
 
   it("is deterministic and does not repeat a 120 second test", () => {

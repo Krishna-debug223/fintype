@@ -1,4 +1,5 @@
 import { getRank } from "@/types";
+import { CONTENT_VERSION } from "@/content";
 import type {
   DailyRecord,
   KeystrokeLog,
@@ -295,7 +296,7 @@ function toSavedTest(
     synced: false,
     schemaVersion: CURRENT_SCHEMA_VERSION,
     retryOfTestId: options.retryOfTestId ?? null,
-    contentVersion: result.settings.contentVersion ?? 2,
+    contentVersion: result.settings.contentVersion ?? CONTENT_VERSION,
   };
 }
 

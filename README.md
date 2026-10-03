@@ -5,7 +5,8 @@ FinType is a finance-native typing platform for the words, figures, and formulas
 Prompt 4 adds durable browser-local history, personal bests, daily records, rich result analysis, and the History, Stats, Settings, Daily, Leaderboard, and About routes. Prompt 5 adds an optional Neon/Postgres/Auth.js layer: deterministic server replay validation, idempotent submissions, profile/account routes, settings sync, reviewable anti-cheat flags, admin actions, Redis-aware limits, and server-backed leaderboards. Guest mode remains fully local when server variables are absent.
 
 The current release adds Monkeytype-style focus mode, a large countdown/progress
-timer, primary header navigation, green accent themes, and content version 2.
+timer, primary header navigation, green accent themes, and a source-grounded
+finance vocabulary bank in content version 3.
 Read [`CONTENT.md`](CONTENT.md) for pool/version rules and
 [`CHANGE-REPORT.md`](CHANGE-REPORT.md) for the release decisions.
 

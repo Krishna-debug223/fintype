@@ -16,7 +16,7 @@ import type {
   FormEvent,
 } from "react";
 
-import { getModeWords } from "@/content";
+import { CONTENT_VERSION, getModeWords } from "@/content";
 import {
   applyInput,
   createTest,
@@ -101,7 +101,7 @@ function createSettings(
     fontSize: preferences.fontSize,
     caretStyle: preferences.caretStyle,
     seed,
-    contentVersion: 2,
+    contentVersion: CONTENT_VERSION,
   };
 }
 
@@ -262,7 +262,8 @@ export function TestScreen() {
               wpm: nextResult.wpm,
               accuracy: nextResult.accuracy,
               testId: outcome.test.id,
-              contentVersion: nextResult.settings.contentVersion ?? 2,
+              contentVersion:
+                nextResult.settings.contentVersion ?? CONTENT_VERSION,
             });
           }
         }

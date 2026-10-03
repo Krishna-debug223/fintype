@@ -19,7 +19,7 @@ Export files use `exportVersion: 1` and include tests, settings, profile, person
 
 ## Content versions
 
-New completed tests persist `contentVersion: 2`. Existing test envelopes and
+New completed tests persist `contentVersion: 3`. Existing test envelopes and
 daily records without the field migrate to `1`, preserving the frozen v1
 generator. History replay, retry, stats analysis, and server submissions pass
 the stored version back to `getModeWords`; unknown server versions are rejected.

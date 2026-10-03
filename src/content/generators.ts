@@ -2,12 +2,23 @@ import { createRng } from "@/engine";
 import type { Difficulty, Mode } from "@/types";
 
 import { getDailyWordsV1, getModeWordsV1 } from "./legacy/v1/generators";
+import {
+  FINANCE_CODE_TERMS,
+  FINANCE_TERMS,
+  FINANCE_TERM_WEIGHTS,
+  type FinanceTier,
+} from "./finance-bank";
 
 /** Content snapshots are part of the replay contract. Bump when output changes. */
-export const CONTENT_VERSION = 2 as const;
+export const CONTENT_VERSION = 3 as const;
 
 type PoolKind = "terms" | "office" | "numbers" | "excel";
-type PoolItem = { text: string; difficulty: Difficulty; kind: PoolKind };
+type PoolItem = {
+  text: string;
+  difficulty: Difficulty;
+  kind: PoolKind;
+  weight?: number;
+};
 const DIFFICULTY_ORDER: readonly Difficulty[] = ["easy", "medium", "hard"];
 
 const TERM_ROOTS = [
@@ -290,27 +301,8 @@ const TERM_ROOTS = [
   "zero-coupon",
 ] as const;
 
-const TERM_MODIFIERS = [
-  "analysis",
-  "assumption",
-  "bridge",
-  "calculation",
-  "case",
-  "curve",
-  "driver",
-  "forecast",
-  "framework",
-  "model",
-  "schedule",
-  "summary",
-  "target",
-  "threshold",
-  "trend",
-  "waterfall",
-] as const;
-
 // A compact, curated symbol bank. It covers US, TSX, global ADR, ETF, rates,
-// commodities, FX, and digital-asset symbols and is expanded by the generator.
+// commodities, FX, and digital-asset symbols.
 const TICKERS =
   `AAPL ABBV ABNB ABT ACGL ACN ADBE ADI ADM AEE AES AFL AIG AJG AKAM ALB ALGN ALL ALLE AMAT AMCR AMD AME AMGN AMP AMT AMZN ANET ANSS AON APA APD APH APO APP ARKK ARKG ASML AVB AVGO AVTR AXP AZO BA BAC BALL BAX BBD BCS BDX BEN BIIB BILI BK BKNG BKR BLK BMO BMY BOIL BOX BP BRK.A BRK.B BRO BSX BTE BYND C CAG CAH CARR CAT CB CBRE CCI CDNS CEG CELH CF CFG CHD CHKP CHRW CHTR CI CINF CL CLF CMI CNC CNQ COF COIN COO COP COST CP CPB CPRT CRM CROX CRSP CSCO CSGP CSX CTAS CTRA CTSH CVNA CVS CVX D DAL DASH DD DE DECK DFS DG DHI DHR DIS DKNG DLTR DLR DOCU DOV DOW DPZ DRI DUK DVN DXCM EA EBAY ECL ED EEM EFA EL ELV EMR ENB ENPH ENTG EOG EPAM EQIX EQR ETR ETN ETSY EVGO EW EWT EXAS EXC EXPD EXPE F FAST FCX FDS FDX FE FICO FIS FITB FIVE FL FLOT FMC FOX FOXA FSLR FTNT FTS FTV GD GDDY GDX GDXJ GE GEV GFI GGAL GILD GIS GLD GLW GM GNRC GOOG GOOGL GPC GPN GS GSK GTLB HAL HAS HBAN HCA HD HES HIG HII HLT HON HOOD HPE HPQ HR HRL HSIC HST HSY HUBS HUM HWM IBM ICE ICLN IDXX IEF IEMG IFF IHI ILMN INDA INTC INTU INVH IP IQV IRM ISRG IT ITW IVV IWM IYR JCI JD JNJ JPM JPS JWN K KDP KEY KHC KIM KKR KLAC KMB KMI KMX KO KR KRE L LAC LAD LAUR LEN LI LHX LIN LKQ LLY LMT LNG LOW LPLA LRCX LULU LVS LYB LYFT LYV MA MANH MAR MCD MCHP MCK MDB MDLZ MDT MDY MET META MGM MHK MKC MKSI MMC MMM MNST MO MOH MOS MPC MRK MRNA MRVL MSFT MSTR MSI MTB MTCH MU NDAQ NEE NEM NFLX NKE NLY NOC NOG NOW NRG NSC NTAP NTR NVDA NVO NVS NWL NWS NWSA NXPI O ODFL OHI OMC ON ONON ORCL ORLY OXY PANW PARA PATH PAYC PAYO PBR PEP PFE PFF PG PGR PH PINC PLD PLTR PM PNC PNR PPG PPL PRU PSA PSX PTC PTON PWR PYPL QCOM QQQ RBLX RCL REG REGN RF RIVN RKT RMD ROK ROST RSG RTX RUN RYAAY S SAN SAP SBUX SCHW SCI SE SEDG SHOP SHW SIGI SLB SLV SMCI SNA SNOW SO SOFI SONY SOXX SPOT SPY SQ SRPT SRE STI STLD STNE STX STT SU SYF SYK SYY T TD TGT TJX TKO TMO TMUS TOST TROW TRP TRV TSCO TSLA TSM TSN TT TTD TTE TWLO TXN TXT U UAA UA UBER UDR UL UNH UNP UPS URI USB USO UUP V VFC VICI VLO VMC VNO VOD VOO VRTX VST VTI VTR VTRS W WBA WBD WDC WEC WELL WFC WM WMB WMT WPC WRB WSM WTW WY X XEL XLF XLI XLK XLP XLU XLV XLY XOM XPEV XRT XYL YUM Z ZBH ZBRA ZM ZS ZTO AC.TO AEM.TO ATD.TO BCE.TO BMO.TO BNS.TO CCO.TO CNR.TO CP.TO CSU.TO CVE.TO DOL.TO EMA.TO ENB.TO FM.TO FNV.TO GIB.A.TO GIL.TO H.TO IFC.TO IMO.TO IGM.TO L.TO MFC.TO MG.TO NA.TO NTR.TO OTEX.TO POW.TO PPL.TO QSR.TO RY.TO SAP.TO SHOP.TO SLF.TO SU.TO TD.TO TECK.B.TO TFII.TO TRI.TO WCN.TO WFG.TO WN.TO WSP.TO X.TO EURUSD GBPUSD USDJPY USDCHF USDCAD AUDUSD NZDUSD EURGBP EURJPY GBPJPY USDNOK USDMXN USDBRL USDCNH DXY BTCUSD ETHUSD SOLUSD XBTUSD GC CL SI HG NG ZB ZN ZF ZT ES NQ RTY YM VX VIX`.split(
     /\s+/,
@@ -391,29 +383,60 @@ function difficultyFor(index: number): Difficulty {
   return DIFFICULTY_ORDER[index % DIFFICULTY_ORDER.length] ?? "medium";
 }
 
+function difficultyForTier(tier: FinanceTier): Difficulty {
+  // The common bank is intentionally available in the default medium queue;
+  // “easy” remains reserved for the simple numeric and office tokens.
+  if (tier === "core") return "medium";
+  if (tier === "specialist") return "hard";
+  return "medium";
+}
+
 function buildTerms(): PoolItem[] {
-  const items: PoolItem[] = TERM_ROOTS.map((text, index) => ({
-    text,
-    difficulty: difficultyFor(index + 1),
-    kind: "terms",
-  }));
-  TERM_ROOTS.forEach((root, rootIndex) =>
-    TERM_MODIFIERS.forEach((modifier, modifierIndex) =>
-      items.push({
-        text: `${root}-${modifier}`,
-        difficulty: difficultyFor(rootIndex + modifierIndex + 2),
+  const byText = new Map<string, PoolItem>();
+  const add = (item: PoolItem) => {
+    const existing = byText.get(item.text);
+    if (!existing || (item.weight ?? 1) > (existing.weight ?? 1))
+      byText.set(item.text, item);
+  };
+
+  (Object.keys(FINANCE_TERMS) as FinanceTier[]).forEach((tier) => {
+    FINANCE_TERMS[tier].forEach((text, index) =>
+      add({
+        text,
+        difficulty: difficultyForTier(tier),
         kind: "terms",
+        weight: FINANCE_TERM_WEIGHTS[tier] + (index % 3 === 0 ? 1 : 0),
       }),
-    ),
+    );
+  });
+
+  // These are still useful, established finance phrases, but they sit below
+  // the single-word core rather than being multiplied into synthetic forms.
+  TERM_ROOTS.forEach((text, index) =>
+    add({
+      text,
+      difficulty: difficultyFor(index + 1),
+      kind: "terms",
+      weight: text.includes("-") ? 1 : 3,
+    }),
   );
   TICKERS.forEach((ticker, index) =>
-    items.push({
+    add({
       text: ticker,
       difficulty: difficultyFor(index),
       kind: "terms",
+      weight: 3,
     }),
   );
-  return items;
+  FINANCE_CODE_TERMS.forEach((text, index) =>
+    add({
+      text,
+      difficulty: difficultyFor(index + 1),
+      kind: "terms",
+      weight: 4,
+    }),
+  );
+  return [...byText.values()];
 }
 
 function buildOffice(): PoolItem[] {
@@ -552,16 +575,6 @@ function buildExcel(): PoolItem[] {
 
 const TERMS = buildTerms();
 const OFFICE = buildOffice();
-const OFFICE_TOKEN_SUFFIXES = [
-  "brief",
-  "checklist",
-  "comment",
-  "deliverable",
-  "memo",
-  "review",
-  "tracker",
-  "workstream",
-] as const;
 const OFFICE_TOKENS: PoolItem[] = Array.from(
   new Set(
     OFFICE.flatMap((line) =>
@@ -571,17 +584,19 @@ const OFFICE_TOKENS: PoolItem[] = Array.from(
         .trim()
         .split(/\s+/),
     )
-      .concat(TERM_ROOTS)
-      .concat(
-        TERM_ROOTS.flatMap((root) =>
-          OFFICE_TOKEN_SUFFIXES.map((suffix) => `${root}-${suffix}`),
-        ),
-      ),
+      .concat(FINANCE_TERMS.core)
+      .concat(FINANCE_TERMS.accounting)
+      .concat(FINANCE_TERMS.workflow)
+      .concat(FINANCE_TERMS.markets)
+      .concat(FINANCE_TERMS.banking)
+      .concat(FINANCE_TERMS.specialist)
+      .concat(FINANCE_CODE_TERMS),
   ),
 ).map((text, index) => ({
   text,
   difficulty: difficultyFor(index + 2),
   kind: "office",
+  weight: 4,
 }));
 const NUMBERS = buildNumbers();
 const EXCEL = buildExcel();
@@ -607,14 +622,15 @@ function draw(
   if (pool.length === 0 || count <= 0) return [];
   const output: PoolItem[] = [];
   const seen = new Set<string>();
-  let remaining = rng.shuffle(pool);
+  let remaining = weightedShuffle(pool, rng);
   let recent: string[] = [];
   while (output.length < count) {
     if (remaining.length === 0) {
-      remaining = rng.shuffle(
+      remaining = weightedShuffle(
         pool.filter((item) => !recent.includes(item.text)),
+        rng,
       );
-      if (remaining.length === 0) remaining = rng.shuffle(pool);
+      if (remaining.length === 0) remaining = weightedShuffle(pool, rng);
     }
     const next = remaining.shift();
     if (!next) break;
@@ -624,6 +640,29 @@ function draw(
     recent = [...recent.slice(-39), next.text];
   }
   return output;
+}
+
+function weightedShuffle(
+  pool: readonly PoolItem[],
+  rng: ReturnType<typeof createRng>,
+): PoolItem[] {
+  return rng
+    .shuffle(pool)
+    .map((item, index) => ({
+      item,
+      index,
+      // Efraimidis-Spirakis style priority: larger weights are more likely to
+      // appear early, while each draw still remains deterministic and unique.
+      priority: Math.pow(
+        Math.max(rng.next(), Number.EPSILON),
+        1 / (item.weight ?? 1),
+      ),
+    }))
+    .sort(
+      (left, right) =>
+        right.priority - left.priority || left.index - right.index,
+    )
+    .map(({ item }) => item);
 }
 
 function drawMixed(
