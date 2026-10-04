@@ -32,8 +32,8 @@ would change the output for an existing seed. Version 1 is frozen in
 `src/content/legacy/v1`; existing records without a version migrate to v1.
 Retries, history analysis, daily records, and server replay use the record's
 own version. Today's daily challenge uses the current version. Version 3 is the
-first release of the source-grounded bank; older v2 records remain labeled in
-history while new tests use v3.
+first release of the source-grounded bank; v2 replay remains available for
+older saved tests while new tests use v3.
 
 Excel generation uses deterministic templates for SUM, AVERAGE, IF, VLOOKUP,
 XLOOKUP, INDEX/MATCH, SUMIFS, NPV, IRR, EOMONTH, IFERROR, and SUMPRODUCT. Cell

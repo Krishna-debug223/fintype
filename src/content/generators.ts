@@ -439,6 +439,52 @@ function buildTerms(): PoolItem[] {
   return [...byText.values()];
 }
 
+// The previous generated release remains available for replaying tests that
+// were saved with contentVersion 2. New tests use the source-grounded v3 bank.
+const V2_TERM_MODIFIERS = [
+  "analysis",
+  "assumption",
+  "bridge",
+  "calculation",
+  "case",
+  "curve",
+  "driver",
+  "forecast",
+  "framework",
+  "model",
+  "schedule",
+  "summary",
+  "target",
+  "threshold",
+  "trend",
+  "waterfall",
+] as const;
+
+function buildTermsV2(): PoolItem[] {
+  const items: PoolItem[] = TERM_ROOTS.map((text, index) => ({
+    text,
+    difficulty: difficultyFor(index + 1),
+    kind: "terms",
+  }));
+  TERM_ROOTS.forEach((root, rootIndex) =>
+    V2_TERM_MODIFIERS.forEach((modifier, modifierIndex) =>
+      items.push({
+        text: `${root}-${modifier}`,
+        difficulty: difficultyFor(rootIndex + modifierIndex + 2),
+        kind: "terms",
+      }),
+    ),
+  );
+  TICKERS.forEach((ticker, index) =>
+    items.push({
+      text: ticker,
+      difficulty: difficultyFor(index),
+      kind: "terms",
+    }),
+  );
+  return items;
+}
+
 function buildOffice(): PoolItem[] {
   const items: PoolItem[] = [];
   let index = 0;
@@ -574,7 +620,18 @@ function buildExcel(): PoolItem[] {
 }
 
 const TERMS = buildTerms();
+const TERMS_V2 = buildTermsV2();
 const OFFICE = buildOffice();
+const OFFICE_TOKEN_SUFFIXES_V2 = [
+  "brief",
+  "checklist",
+  "comment",
+  "deliverable",
+  "memo",
+  "review",
+  "tracker",
+  "workstream",
+] as const;
 const OFFICE_TOKENS: PoolItem[] = Array.from(
   new Set(
     OFFICE.flatMap((line) =>
@@ -597,6 +654,27 @@ const OFFICE_TOKENS: PoolItem[] = Array.from(
   difficulty: difficultyFor(index + 2),
   kind: "office",
   weight: 4,
+}));
+const OFFICE_TOKENS_V2: PoolItem[] = Array.from(
+  new Set(
+    OFFICE.flatMap((line) =>
+      line.text
+        .toLowerCase()
+        .replace(/[^a-z0-9$%./-]+/g, " ")
+        .trim()
+        .split(/\s+/),
+    )
+      .concat(TERM_ROOTS)
+      .concat(
+        TERM_ROOTS.flatMap((root) =>
+          OFFICE_TOKEN_SUFFIXES_V2.map((suffix) => `${root}-${suffix}`),
+        ),
+      ),
+  ),
+).map((text, index) => ({
+  text,
+  difficulty: difficultyFor(index + 2),
+  kind: "office",
 }));
 const NUMBERS = buildNumbers();
 const EXCEL = buildExcel();
@@ -665,6 +743,72 @@ function weightedShuffle(
     .map(({ item }) => item);
 }
 
+function drawUnweighted(
+  pool: readonly PoolItem[],
+  count: number,
+  rng: ReturnType<typeof createRng>,
+): PoolItem[] {
+  if (pool.length === 0 || count <= 0) return [];
+  const output: PoolItem[] = [];
+  const seen = new Set<string>();
+  let remaining = rng.shuffle(pool);
+  let recent: string[] = [];
+  while (output.length < count) {
+    if (remaining.length === 0) {
+      remaining = rng.shuffle(
+        pool.filter((item) => !recent.includes(item.text)),
+      );
+      if (remaining.length === 0) remaining = rng.shuffle(pool);
+    }
+    const next = remaining.shift();
+    if (!next) break;
+    if (seen.has(next.text) && seen.size < pool.length) continue;
+    output.push(next);
+    seen.add(next.text);
+    recent = [...recent.slice(-39), next.text];
+  }
+  return output;
+}
+
+function drawMixedV2(
+  count: number,
+  seed: string,
+  difficulty: Difficulty,
+): string[] {
+  const pools = [TERMS_V2, OFFICE_TOKENS_V2, NUMBERS, EXCEL].map((pool) =>
+    suitable(pool, difficulty),
+  );
+  const queues = pools.map((pool, index) =>
+    drawUnweighted(
+      pool,
+      Math.max(count, pool.length),
+      createRng(`mixed:${seed}:${index}`),
+    ),
+  );
+  const output: string[] = [];
+  const seen = new Set<string>();
+  let lastKind = -1;
+  let sameKind = 0;
+  for (let index = 0; output.length < count; index += 1) {
+    let kind = index % queues.length;
+    if (kind === lastKind && sameKind >= 3) kind = (kind + 1) % queues.length;
+    let item = queues[kind]?.shift();
+    if (!item) {
+      const fallback = queues.findIndex((queue) => queue.length > 0);
+      if (fallback < 0) break;
+      kind = fallback;
+      item = queues[kind]?.shift();
+    }
+    if (!item) break;
+    if (seen.has(item.text)) continue;
+    output.push(item.text);
+    seen.add(item.text);
+    sameKind = kind === lastKind ? sameKind + 1 : 1;
+    lastKind = kind;
+  }
+  return output;
+}
+
 function drawMixed(
   count: number,
   seed: string,
@@ -708,6 +852,31 @@ export interface ContentOptions {
   contentVersion?: number;
 }
 
+function getModeWordsV2(
+  mode: Mode,
+  count: number,
+  seed: string,
+  difficulty: Difficulty,
+): string[] {
+  if (mode === "mixed" || mode === "daily")
+    return drawMixedV2(count, seed, difficulty);
+  const source =
+    mode === "terms"
+      ? TERMS_V2
+      : mode === "office"
+        ? OFFICE_TOKENS_V2
+        : mode === "numbers"
+          ? NUMBERS
+          : mode === "excel"
+            ? EXCEL
+            : TERMS_V2;
+  return drawUnweighted(
+    suitable(source, difficulty),
+    count,
+    createRng(`2:${mode}:${difficulty}:${seed}`),
+  ).map((item) => item.text);
+}
+
 export function getModeWords(
   mode: Mode,
   count: number,
@@ -715,8 +884,11 @@ export function getModeWords(
   difficulty: Difficulty = "medium",
   options: ContentOptions = {},
 ): string[] {
-  if ((options.contentVersion ?? CONTENT_VERSION) === 1)
+  const contentVersion = options.contentVersion ?? CONTENT_VERSION;
+  if (contentVersion === 1)
     return getModeWordsV1(mode, count, seed, difficulty);
+  if (contentVersion === 2)
+    return getModeWordsV2(mode, count, seed, difficulty);
   if (mode === "mixed" || mode === "daily")
     return drawMixed(count, seed, difficulty);
   const source =
@@ -741,8 +913,10 @@ export function getDailyWords(
   utcDate: string,
   options: ContentOptions = {},
 ): string[] {
-  if ((options.contentVersion ?? CONTENT_VERSION) === 1)
-    return getDailyWordsV1(count, utcDate);
+  const contentVersion = options.contentVersion ?? CONTENT_VERSION;
+  if (contentVersion === 1) return getDailyWordsV1(count, utcDate);
+  if (contentVersion === 2)
+    return getModeWordsV2("daily", count, getDailySeed(utcDate), "medium");
   return getModeWords("daily", count, getDailySeed(utcDate), "medium", options);
 }
 

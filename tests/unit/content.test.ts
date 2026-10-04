@@ -39,6 +39,18 @@ describe("content v3", () => {
     );
   });
 
+  it("keeps the v2 generator available for saved replays", () => {
+    const first = getModeWords("terms", 40, "v2-replay", "medium", {
+      contentVersion: 2,
+    });
+    expect(first).toEqual(
+      getModeWords("terms", 40, "v2-replay", "medium", {
+        contentVersion: 2,
+      }),
+    );
+    expect(new Set(first).size).toBe(first.length);
+  });
+
   it("emits balanced printable Excel formulas", () => {
     const formulas = getModeWords("excel", 300, "formula-seed");
     expect(
